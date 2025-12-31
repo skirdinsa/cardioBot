@@ -36,6 +36,44 @@ sheets_manager = SheetsManager(
 )
 
 
+def analyze_blood_pressure(upper: int, lower: int) -> str:
+    """
+    Analyze blood pressure values and return feedback
+
+    Args:
+        upper: Upper (systolic) blood pressure
+        lower: Lower (diastolic) blood pressure
+
+    Returns:
+        Feedback message with emoji
+    """
+    optimal_upper = int(os.getenv('OPTIMAL_UPPER', 110))
+    optimal_lower = int(os.getenv('OPTIMAL_LOWER', 70))
+    good_upper = int(os.getenv('GOOD_UPPER', 130))
+    good_lower = int(os.getenv('GOOD_LOWER', 80))
+
+    # Check if values are optimal
+    if upper <= optimal_upper and lower <= optimal_lower:
+        return f"Отлично! Давление оптимальное."
+
+    # Check if values are good
+    elif upper <= good_upper and lower <= good_lower:
+        return f"Хорошо! Давление в норме."
+
+    # Check for high blood pressure
+    elif upper > good_upper or lower > good_lower:
+        message = "⚠️ Внимание! Повышенное давление."
+        if upper > good_upper and lower > good_lower:
+            message += f" Оба показателя выше нормы (норма до {good_upper}/{good_lower})."
+        elif upper > good_upper:
+            message += f" Верхнее давление выше нормы (норма до {good_upper})."
+        else:
+            message += f" Нижнее давление выше нормы (норма до {good_lower})."
+        return message
+
+    return "Давление в пределах нормы."
+
+
 class MeasurementData:
     """Temporary storage for measurement data during conversation"""
     def __init__(self):
@@ -174,11 +212,23 @@ async def morning_right_pulse(update: Update, context: ContextTypes.DEFAULT_TYPE
         )
 
         if success:
+            # Analyze blood pressure for both arms
+            left_analysis = analyze_blood_pressure(
+                current_measurement.left_upper,
+                current_measurement.left_lower
+            )
+            right_analysis = analyze_blood_pressure(
+                current_measurement.right_upper,
+                current_measurement.right_lower
+            )
+
             await update.message.reply_text(
                 '✅ Утреннее измерение сохранено!\n\n'
-                f'Дата: {current_measurement.date}\n'
-                f'Левая рука: {current_measurement.left_upper}/{current_measurement.left_lower}, пульс {current_measurement.left_pulse}\n'
-                f'Правая рука: {current_measurement.right_upper}/{current_measurement.right_lower}, пульс {current_measurement.right_pulse}'
+                f'Дата: {current_measurement.date}\n\n'
+                f'📍 Левая рука: {current_measurement.left_upper}/{current_measurement.left_lower}, пульс {current_measurement.left_pulse}\n'
+                f'{left_analysis}\n\n'
+                f'📍 Правая рука: {current_measurement.right_upper}/{current_measurement.right_lower}, пульс {current_measurement.right_pulse}\n'
+                f'{right_analysis}'
             )
         else:
             await update.message.reply_text(
@@ -283,11 +333,23 @@ async def evening_right_pulse(update: Update, context: ContextTypes.DEFAULT_TYPE
         )
 
         if success:
+            # Analyze blood pressure for both arms
+            left_analysis = analyze_blood_pressure(
+                current_measurement.left_upper,
+                current_measurement.left_lower
+            )
+            right_analysis = analyze_blood_pressure(
+                current_measurement.right_upper,
+                current_measurement.right_lower
+            )
+
             await update.message.reply_text(
                 '✅ Вечернее измерение сохранено!\n\n'
-                f'Дата: {current_measurement.date}\n'
-                f'Левая рука: {current_measurement.left_upper}/{current_measurement.left_lower}, пульс {current_measurement.left_pulse}\n'
-                f'Правая рука: {current_measurement.right_upper}/{current_measurement.right_lower}, пульс {current_measurement.right_pulse}'
+                f'Дата: {current_measurement.date}\n\n'
+                f'📍 Левая рука: {current_measurement.left_upper}/{current_measurement.left_lower}, пульс {current_measurement.left_pulse}\n'
+                f'{left_analysis}\n\n'
+                f'📍 Правая рука: {current_measurement.right_upper}/{current_measurement.right_lower}, пульс {current_measurement.right_pulse}\n'
+                f'{right_analysis}'
             )
         else:
             await update.message.reply_text(
