@@ -47,31 +47,57 @@ def analyze_blood_pressure(upper: int, lower: int) -> str:
     Returns:
         Feedback message with emoji
     """
-    optimal_upper = int(os.getenv('OPTIMAL_UPPER', 110))
-    optimal_lower = int(os.getenv('OPTIMAL_LOWER', 70))
+    # Thresholds for blood pressure
     good_upper = int(os.getenv('GOOD_UPPER', 130))
-    good_lower = int(os.getenv('GOOD_LOWER', 80))
+    warning_upper = int(os.getenv('WARNING_UPPER', 140))
+    good_lower = int(os.getenv('GOOD_LOWER', 70))
+    warning_lower = int(os.getenv('WARNING_LOWER', 90))
 
-    # Check if values are optimal
-    if upper <= optimal_upper and lower <= optimal_lower:
-        return f"Отлично! Давление оптимальное."
+    # Determine status for upper (systolic) pressure
+    if upper <= good_upper:
+        upper_status = "good"
+        upper_emoji = "🟢"
+    elif upper <= warning_upper:
+        upper_status = "warning"
+        upper_emoji = "🟡"
+    else:
+        upper_status = "bad"
+        upper_emoji = "🔴"
 
-    # Check if values are good
-    elif upper <= good_upper and lower <= good_lower:
-        return f"Хорошо! Давление в норме."
+    # Determine status for lower (diastolic) pressure
+    if lower <= good_lower:
+        lower_status = "good"
+        lower_emoji = "🟢"
+    elif lower <= warning_lower:
+        lower_status = "warning"
+        lower_emoji = "🟡"
+    else:
+        lower_status = "bad"
+        lower_emoji = "🔴"
 
-    # Check for high blood pressure
-    elif upper > good_upper or lower > good_lower:
-        message = "⚠️ Внимание! Повышенное давление."
-        if upper > good_upper and lower > good_lower:
-            message += f" Оба показателя выше нормы (норма до {good_upper}/{good_lower})."
-        elif upper > good_upper:
-            message += f" Верхнее давление выше нормы (норма до {good_upper})."
+    # Generate feedback message
+    if upper_status == "good" and lower_status == "good":
+        return f"{upper_emoji}{lower_emoji} Отлично! Давление в норме."
+    elif upper_status == "bad" or lower_status == "bad":
+        message = f"{upper_emoji}{lower_emoji} ⚠️ Внимание! Повышенное давление."
+        if upper_status == "bad" and lower_status == "bad":
+            message += f" Оба показателя требуют внимания."
+        elif upper_status == "bad":
+            message += f" Верхнее давление слишком высокое (>{warning_upper})."
         else:
-            message += f" Нижнее давление выше нормы (норма до {good_lower})."
+            message += f" Нижнее давление слишком высокое (>{warning_lower})."
         return message
-
-    return "Давление в пределах нормы."
+    else:
+        # At least one is in warning zone
+        message = f"{upper_emoji}{lower_emoji} Давление умеренно повышено."
+        details = []
+        if upper_status == "warning":
+            details.append(f"верхнее {upper}")
+        if lower_status == "warning":
+            details.append(f"нижнее {lower}")
+        if details:
+            message += f" ({', '.join(details)})"
+        return message
 
 
 class MeasurementData:
