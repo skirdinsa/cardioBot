@@ -9,6 +9,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application files
 COPY scheduler.py .
+COPY sheets_manager.py .
+COPY credentials.json .
 COPY .env .
 
 # Run the scheduler
