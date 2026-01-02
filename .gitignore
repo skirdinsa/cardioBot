@@ -43,3 +43,7 @@ Thumbs.db
 
 # Logs
 *.log
+
+# Bot persistence data
+bot_data.pkl
+bot_data.pkl.bak

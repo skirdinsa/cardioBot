@@ -221,3 +221,61 @@ class SheetsManager:
         except Exception as e:
             logger.error(f'Error getting measurement: {e}')
             return None
+
+    def has_morning_measurement(self, date: str) -> bool:
+        """
+        Check if morning measurement exists for a specific date
+
+        Args:
+            date: Date in format DD.MM.YYYY
+
+        Returns:
+            True if morning measurement exists, False otherwise
+        """
+        try:
+            measurement = self.get_measurement(date)
+            if measurement is None:
+                return False
+
+            # Check if at least one morning value is filled
+            morning = measurement['morning']
+            return bool(
+                morning['left']['upper'] or
+                morning['left']['lower'] or
+                morning['left']['pulse'] or
+                morning['right']['upper'] or
+                morning['right']['lower'] or
+                morning['right']['pulse']
+            )
+        except Exception as e:
+            logger.error(f'Error checking morning measurement: {e}')
+            return False
+
+    def has_evening_measurement(self, date: str) -> bool:
+        """
+        Check if evening measurement exists for a specific date
+
+        Args:
+            date: Date in format DD.MM.YYYY
+
+        Returns:
+            True if evening measurement exists, False otherwise
+        """
+        try:
+            measurement = self.get_measurement(date)
+            if measurement is None:
+                return False
+
+            # Check if at least one evening value is filled
+            evening = measurement['evening']
+            return bool(
+                evening['left']['upper'] or
+                evening['left']['lower'] or
+                evening['left']['pulse'] or
+                evening['right']['upper'] or
+                evening['right']['lower'] or
+                evening['right']['pulse']
+            )
+        except Exception as e:
+            logger.error(f'Error checking evening measurement: {e}')
+            return False

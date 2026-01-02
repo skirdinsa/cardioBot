@@ -1,6 +1,7 @@
 import os
 import logging
 from datetime import datetime
+import pytz
 from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove
 from telegram.ext import (
     Application,
@@ -9,6 +10,7 @@ from telegram.ext import (
     ConversationHandler,
     filters,
     ContextTypes,
+    PicklePersistence,
 )
 from dotenv import load_dotenv
 from sheets_manager import SheetsManager
@@ -27,7 +29,8 @@ logger = logging.getLogger(__name__)
 (MORNING_LEFT_UPPER, MORNING_LEFT_LOWER, MORNING_LEFT_PULSE,
  MORNING_RIGHT_UPPER, MORNING_RIGHT_LOWER, MORNING_RIGHT_PULSE,
  EVENING_LEFT_UPPER, EVENING_LEFT_LOWER, EVENING_LEFT_PULSE,
- EVENING_RIGHT_UPPER, EVENING_RIGHT_LOWER, EVENING_RIGHT_PULSE) = range(12)
+ EVENING_RIGHT_UPPER, EVENING_RIGHT_LOWER, EVENING_RIGHT_PULSE,
+ SETTINGS_TIMEZONE) = range(13)
 
 # Initialize Sheets Manager
 sheets_manager = SheetsManager(
@@ -123,14 +126,20 @@ current_measurement = MeasurementData()
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Send a message when the command /start is issued."""
     user = update.effective_user
+
+    # Get current timezone from environment or user data
+    current_tz = context.user_data.get('timezone', os.getenv('TIMEZONE', 'Europe/Moscow'))
+
     await update.message.reply_text(
         f'Привет, {user.first_name}!\n\n'
         'Я буду напоминать вам измерять давление 2 раза в день.\n\n'
         'Команды:\n'
         '/morning - Утреннее измерение\n'
         '/evening - Вечернее измерение\n'
+        '/settings - Настройки (таймзона, время напоминаний)\n'
         '/cancel - Отменить текущее измерение\n'
-        '/help - Показать помощь'
+        '/help - Показать помощь\n\n'
+        f'Текущая таймзона: {current_tz}'
     )
 
 
@@ -140,10 +149,53 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         'Команды бота:\n\n'
         '/morning - Начать утреннее измерение давления\n'
         '/evening - Начать вечернее измерение давления\n'
+        '/settings - Настройки (таймзона, время напоминаний)\n'
         '/cancel - Отменить текущее измерение\n'
         '/help - Показать эту справку\n\n'
         'Бот будет автоматически напоминать вам о необходимости измерения давления.'
     )
+
+
+async def settings_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Start settings configuration"""
+    current_tz = context.user_data.get('timezone', os.getenv('TIMEZONE', 'Europe/Moscow'))
+
+    await update.message.reply_text(
+        f'⚙️ Настройки\n\n'
+        f'Текущая таймзона: {current_tz}\n\n'
+        'Введите новую таймзону (например: Europe/Moscow, Asia/Tokyo, America/New_York)\n'
+        'Или отправьте /cancel для отмены'
+    )
+    return SETTINGS_TIMEZONE
+
+
+async def settings_timezone(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Save timezone setting"""
+    timezone_str = update.message.text.strip()
+
+    try:
+        # Validate timezone
+        pytz.timezone(timezone_str)
+
+        # Save to user data
+        context.user_data['timezone'] = timezone_str
+
+        await update.message.reply_text(
+            f'✅ Таймзона обновлена: {timezone_str}\n\n'
+            'Примечание: для применения изменений в расписании напоминаний требуется перезапуск scheduler.'
+        )
+        return ConversationHandler.END
+    except pytz.exceptions.UnknownTimeZoneError:
+        await update.message.reply_text(
+            f'❌ Неизвестная таймзона: {timezone_str}\n\n'
+            'Примеры правильных таймзон:\n'
+            '- Europe/Moscow\n'
+            '- Asia/Tokyo\n'
+            '- America/New_York\n'
+            '- UTC\n\n'
+            'Попробуйте снова или отправьте /cancel'
+        )
+        return SETTINGS_TIMEZONE
 
 
 async def morning_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -399,8 +451,11 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 
 def main() -> None:
     """Start the bot"""
+    # Create persistence
+    persistence = PicklePersistence(filepath='bot_data.pkl')
+
     # Create the Application
-    application = Application.builder().token(os.getenv('TELEGRAM_BOT_TOKEN')).build()
+    application = Application.builder().token(os.getenv('TELEGRAM_BOT_TOKEN')).persistence(persistence).build()
 
     # Morning conversation handler
     morning_conv_handler = ConversationHandler(
@@ -414,6 +469,8 @@ def main() -> None:
             MORNING_RIGHT_PULSE: [MessageHandler(filters.TEXT & ~filters.COMMAND, morning_right_pulse)],
         },
         fallbacks=[CommandHandler('cancel', cancel)],
+        name='morning_conversation',
+        persistent=True,
     )
 
     # Evening conversation handler
@@ -428,11 +485,25 @@ def main() -> None:
             EVENING_RIGHT_PULSE: [MessageHandler(filters.TEXT & ~filters.COMMAND, evening_right_pulse)],
         },
         fallbacks=[CommandHandler('cancel', cancel)],
+        name='evening_conversation',
+        persistent=True,
+    )
+
+    # Settings conversation handler
+    settings_conv_handler = ConversationHandler(
+        entry_points=[CommandHandler('settings', settings_start)],
+        states={
+            SETTINGS_TIMEZONE: [MessageHandler(filters.TEXT & ~filters.COMMAND, settings_timezone)],
+        },
+        fallbacks=[CommandHandler('cancel', cancel)],
+        name='settings_conversation',
+        persistent=True,
     )
 
     # Add handlers
     application.add_handler(CommandHandler('start', start))
     application.add_handler(CommandHandler('help', help_command))
+    application.add_handler(settings_conv_handler)
     application.add_handler(morning_conv_handler)
     application.add_handler(evening_conv_handler)
 
