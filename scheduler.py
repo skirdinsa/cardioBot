@@ -22,6 +22,7 @@ class ReminderScheduler:
         self.bot = Bot(token=os.getenv('TELEGRAM_BOT_TOKEN'))
         self.user_id = os.getenv('TELEGRAM_USER_ID')
         self.timezone = pytz.timezone(os.getenv('TIMEZONE', 'Europe/Moscow'))
+        self._apply_timezone()
         self.morning_time = os.getenv('MORNING_REMINDER_TIME', '09:00')
         self.evening_time = os.getenv('EVENING_REMINDER_TIME', '21:00')
         self.sheets_manager = SheetsManager(
@@ -32,6 +33,16 @@ class ReminderScheduler:
         # Calculate reminder times (main + 30 min + 60 min)
         self.morning_reminder_times = self._calculate_reminder_times(self.morning_time)
         self.evening_reminder_times = self._calculate_reminder_times(self.evening_time)
+
+    def _apply_timezone(self) -> None:
+        """Apply TZ for schedule library which uses local time."""
+        tz_name = os.getenv('TIMEZONE', 'Europe/Moscow')
+        os.environ['TZ'] = tz_name
+        try:
+            time.tzset()
+            logger.info(f'Applied timezone for scheduler: {tz_name}')
+        except AttributeError:
+            logger.info('time.tzset is not available; using system timezone')
 
     def _calculate_reminder_times(self, base_time: str) -> list:
         """

@@ -36,6 +36,16 @@ def load_version() -> str:
 
 VERSION = load_version()
 
+
+def get_current_date(context: ContextTypes.DEFAULT_TYPE) -> str:
+    """Get current date based on user or env timezone."""
+    tz_name = context.user_data.get('timezone', os.getenv('TIMEZONE', 'Europe/Moscow'))
+    try:
+        tz = pytz.timezone(tz_name)
+    except pytz.exceptions.UnknownTimeZoneError:
+        tz = pytz.timezone(os.getenv('TIMEZONE', 'Europe/Moscow'))
+    return datetime.now(tz).strftime('%d.%m.%Y')
+
 # Conversation states
 (MORNING_LEFT_UPPER, MORNING_LEFT_LOWER, MORNING_LEFT_PULSE,
  MORNING_RIGHT_UPPER, MORNING_RIGHT_LOWER, MORNING_RIGHT_PULSE,
@@ -230,7 +240,7 @@ async def settings_timezone(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 async def morning_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Start morning blood pressure measurement"""
     current_measurement.reset()
-    current_measurement.date = datetime.now().strftime('%d.%m.%Y')
+    current_measurement.date = get_current_date(context)
     current_measurement.time_of_day = 'morning'
 
     # Store user's command message ID
@@ -384,7 +394,7 @@ async def morning_right_pulse(update: Update, context: ContextTypes.DEFAULT_TYPE
 async def evening_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Start evening blood pressure measurement"""
     current_measurement.reset()
-    current_measurement.date = datetime.now().strftime('%d.%m.%Y')
+    current_measurement.date = get_current_date(context)
     current_measurement.time_of_day = 'evening'
 
     # Store user's command message ID
