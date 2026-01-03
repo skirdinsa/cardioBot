@@ -117,10 +117,21 @@ class MeasurementData:
         self.right_upper = None
         self.right_lower = None
         self.right_pulse = None
+        self.message_ids = []  # Store message IDs to delete later
 
 
 # Global storage for current measurement
 current_measurement = MeasurementData()
+
+
+async def send_and_track(update: Update, text: str) -> None:
+    """Send a message and track its ID for later deletion"""
+    # Store user's message ID
+    current_measurement.message_ids.append(update.message.message_id)
+
+    # Send bot's message and store its ID
+    msg = await update.message.reply_text(text)
+    current_measurement.message_ids.append(msg.message_id)
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -204,79 +215,98 @@ async def morning_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
     current_measurement.date = datetime.now().strftime('%d.%m.%Y')
     current_measurement.time_of_day = 'morning'
 
-    await update.message.reply_text(
+    # Store user's command message ID
+    current_measurement.message_ids.append(update.message.message_id)
+
+    msg = await update.message.reply_text(
         '🌅 Утреннее измерение\n\n'
         'ЛЕВАЯ рука\n'
         'Введите ВЕРХНЕЕ давление:'
     )
+    current_measurement.message_ids.append(msg.message_id)
     return MORNING_LEFT_UPPER
 
 
 async def morning_left_upper(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Store left upper pressure and ask for lower"""
+    text = update.message.text
+
     try:
-        value = int(update.message.text)
+        value = int(text)
         current_measurement.left_upper = value
-        await update.message.reply_text('ЛЕВАЯ рука\nВведите НИЖНЕЕ давление:')
+        await send_and_track(update, 'ЛЕВАЯ рука\nВведите НИЖНЕЕ давление:')
         return MORNING_LEFT_LOWER
     except ValueError:
-        await update.message.reply_text('Пожалуйста, введите число:')
+        await send_and_track(update, 'Пожалуйста, введите число:')
         return MORNING_LEFT_UPPER
 
 
 async def morning_left_lower(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Store left lower pressure and ask for pulse"""
+    text = update.message.text
+
     try:
-        value = int(update.message.text)
+        value = int(text)
         current_measurement.left_lower = value
-        await update.message.reply_text('ЛЕВАЯ рука\nВведите ПУЛЬС:')
+        await send_and_track(update, 'ЛЕВАЯ рука\nВведите ПУЛЬС:')
         return MORNING_LEFT_PULSE
     except ValueError:
-        await update.message.reply_text('Пожалуйста, введите число:')
+        await send_and_track(update, 'Пожалуйста, введите число:')
         return MORNING_LEFT_LOWER
 
 
 async def morning_left_pulse(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Store left pulse and ask for right upper pressure"""
+    text = update.message.text
+
     try:
-        value = int(update.message.text)
+        value = int(text)
         current_measurement.left_pulse = value
-        await update.message.reply_text('ПРАВАЯ рука\nВведите ВЕРХНЕЕ давление:')
+        await send_and_track(update, 'ПРАВАЯ рука\nВведите ВЕРХНЕЕ давление:')
         return MORNING_RIGHT_UPPER
     except ValueError:
-        await update.message.reply_text('Пожалуйста, введите число:')
+        await send_and_track(update, 'Пожалуйста, введите число:')
         return MORNING_LEFT_PULSE
 
 
 async def morning_right_upper(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Store right upper pressure and ask for lower"""
+    text = update.message.text
+
     try:
-        value = int(update.message.text)
+        value = int(text)
         current_measurement.right_upper = value
-        await update.message.reply_text('ПРАВАЯ рука\nВведите НИЖНЕЕ давление:')
+        await send_and_track(update, 'ПРАВАЯ рука\nВведите НИЖНЕЕ давление:')
         return MORNING_RIGHT_LOWER
     except ValueError:
-        await update.message.reply_text('Пожалуйста, введите число:')
+        await send_and_track(update, 'Пожалуйста, введите число:')
         return MORNING_RIGHT_UPPER
 
 
 async def morning_right_lower(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Store right lower pressure and ask for pulse"""
+    text = update.message.text
+
     try:
-        value = int(update.message.text)
+        value = int(text)
         current_measurement.right_lower = value
-        await update.message.reply_text('ПРАВАЯ рука\nВведите ПУЛЬС:')
+        await send_and_track(update, 'ПРАВАЯ рука\nВведите ПУЛЬС:')
         return MORNING_RIGHT_PULSE
     except ValueError:
-        await update.message.reply_text('Пожалуйста, введите число:')
+        await send_and_track(update, 'Пожалуйста, введите число:')
         return MORNING_RIGHT_LOWER
 
 
 async def morning_right_pulse(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Store right pulse and save to Google Sheets"""
+    text = update.message.text
+
     try:
-        value = int(update.message.text)
+        value = int(text)
         current_measurement.right_pulse = value
+
+        # Add user's last message to deletion list
+        current_measurement.message_ids.append(update.message.message_id)
 
         # Save to Google Sheets
         success = sheets_manager.add_morning_measurement(
@@ -300,22 +330,36 @@ async def morning_right_pulse(update: Update, context: ContextTypes.DEFAULT_TYPE
                 current_measurement.right_lower
             )
 
-            await update.message.reply_text(
+            # Get Google Sheets link
+            sheet_url = f"https://docs.google.com/spreadsheets/d/{os.getenv('GOOGLE_SHEET_ID')}"
+
+            result_msg = await update.message.reply_text(
                 '✅ Утреннее измерение сохранено!\n\n'
                 f'Дата: {current_measurement.date}\n\n'
                 f'📍 Левая рука: {current_measurement.left_upper}/{current_measurement.left_lower}, пульс {current_measurement.left_pulse}\n'
                 f'{left_analysis}\n\n'
                 f'📍 Правая рука: {current_measurement.right_upper}/{current_measurement.right_lower}, пульс {current_measurement.right_pulse}\n'
-                f'{right_analysis}'
+                f'{right_analysis}\n\n'
+                f'📊 <a href="{sheet_url}">Открыть таблицу</a>',
+                reply_markup=ReplyKeyboardRemove(),
+                parse_mode='HTML'
             )
+
+            # Delete all intermediate messages AFTER showing result
+            for msg_id in current_measurement.message_ids:
+                try:
+                    await context.bot.delete_message(chat_id=update.effective_chat.id, message_id=msg_id)
+                except Exception as e:
+                    logger.warning(f'Could not delete message {msg_id}: {e}')
         else:
             await update.message.reply_text(
-                '❌ Ошибка при сохранении данных. Пожалуйста, попробуйте позже.'
+                '❌ Ошибка при сохранении данных. Пожалуйста, попробуйте позже.',
+                reply_markup=ReplyKeyboardRemove()
             )
 
         return ConversationHandler.END
     except ValueError:
-        await update.message.reply_text('Пожалуйста, введите число:')
+        await send_and_track(update, 'Пожалуйста, введите число:')
         return MORNING_RIGHT_PULSE
 
 
@@ -325,79 +369,98 @@ async def evening_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
     current_measurement.date = datetime.now().strftime('%d.%m.%Y')
     current_measurement.time_of_day = 'evening'
 
-    await update.message.reply_text(
+    # Store user's command message ID
+    current_measurement.message_ids.append(update.message.message_id)
+
+    msg = await update.message.reply_text(
         '🌙 Вечернее измерение\n\n'
         'ЛЕВАЯ рука\n'
         'Введите ВЕРХНЕЕ давление:'
     )
+    current_measurement.message_ids.append(msg.message_id)
     return EVENING_LEFT_UPPER
 
 
 async def evening_left_upper(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Store left upper pressure and ask for lower"""
+    text = update.message.text
+
     try:
-        value = int(update.message.text)
+        value = int(text)
         current_measurement.left_upper = value
-        await update.message.reply_text('ЛЕВАЯ рука\nВведите НИЖНЕЕ давление:')
+        await send_and_track(update, 'ЛЕВАЯ рука\nВведите НИЖНЕЕ давление:')
         return EVENING_LEFT_LOWER
     except ValueError:
-        await update.message.reply_text('Пожалуйста, введите число:')
+        await send_and_track(update, 'Пожалуйста, введите число:')
         return EVENING_LEFT_UPPER
 
 
 async def evening_left_lower(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Store left lower pressure and ask for pulse"""
+    text = update.message.text
+
     try:
-        value = int(update.message.text)
+        value = int(text)
         current_measurement.left_lower = value
-        await update.message.reply_text('ЛЕВАЯ рука\nВведите ПУЛЬС:')
+        await send_and_track(update, 'ЛЕВАЯ рука\nВведите ПУЛЬС:')
         return EVENING_LEFT_PULSE
     except ValueError:
-        await update.message.reply_text('Пожалуйста, введите число:')
+        await send_and_track(update, 'Пожалуйста, введите число:')
         return EVENING_LEFT_LOWER
 
 
 async def evening_left_pulse(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Store left pulse and ask for right upper pressure"""
+    text = update.message.text
+
     try:
-        value = int(update.message.text)
+        value = int(text)
         current_measurement.left_pulse = value
-        await update.message.reply_text('ПРАВАЯ рука\nВведите ВЕРХНЕЕ давление:')
+        await send_and_track(update, 'ПРАВАЯ рука\nВведите ВЕРХНЕЕ давление:')
         return EVENING_RIGHT_UPPER
     except ValueError:
-        await update.message.reply_text('Пожалуйста, введите число:')
+        await send_and_track(update, 'Пожалуйста, введите число:')
         return EVENING_LEFT_PULSE
 
 
 async def evening_right_upper(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Store right upper pressure and ask for lower"""
+    text = update.message.text
+
     try:
-        value = int(update.message.text)
+        value = int(text)
         current_measurement.right_upper = value
-        await update.message.reply_text('ПРАВАЯ рука\nВведите НИЖНЕЕ давление:')
+        await send_and_track(update, 'ПРАВАЯ рука\nВведите НИЖНЕЕ давление:')
         return EVENING_RIGHT_LOWER
     except ValueError:
-        await update.message.reply_text('Пожалуйста, введите число:')
+        await send_and_track(update, 'Пожалуйста, введите число:')
         return EVENING_RIGHT_UPPER
 
 
 async def evening_right_lower(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Store right lower pressure and ask for pulse"""
+    text = update.message.text
+
     try:
-        value = int(update.message.text)
+        value = int(text)
         current_measurement.right_lower = value
-        await update.message.reply_text('ПРАВАЯ рука\nВведите ПУЛЬС:')
+        await send_and_track(update, 'ПРАВАЯ рука\nВведите ПУЛЬС:')
         return EVENING_RIGHT_PULSE
     except ValueError:
-        await update.message.reply_text('Пожалуйста, введите число:')
+        await send_and_track(update, 'Пожалуйста, введите число:')
         return EVENING_RIGHT_LOWER
 
 
 async def evening_right_pulse(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Store right pulse and save to Google Sheets"""
+    text = update.message.text
+
     try:
-        value = int(update.message.text)
+        value = int(text)
         current_measurement.right_pulse = value
+
+        # Add user's last message to deletion list
+        current_measurement.message_ids.append(update.message.message_id)
 
         # Save to Google Sheets
         success = sheets_manager.add_evening_measurement(
@@ -421,22 +484,36 @@ async def evening_right_pulse(update: Update, context: ContextTypes.DEFAULT_TYPE
                 current_measurement.right_lower
             )
 
-            await update.message.reply_text(
+            # Get Google Sheets link
+            sheet_url = f"https://docs.google.com/spreadsheets/d/{os.getenv('GOOGLE_SHEET_ID')}"
+
+            result_msg = await update.message.reply_text(
                 '✅ Вечернее измерение сохранено!\n\n'
                 f'Дата: {current_measurement.date}\n\n'
                 f'📍 Левая рука: {current_measurement.left_upper}/{current_measurement.left_lower}, пульс {current_measurement.left_pulse}\n'
                 f'{left_analysis}\n\n'
                 f'📍 Правая рука: {current_measurement.right_upper}/{current_measurement.right_lower}, пульс {current_measurement.right_pulse}\n'
-                f'{right_analysis}'
+                f'{right_analysis}\n\n'
+                f'📊 <a href="{sheet_url}">Открыть таблицу</a>',
+                reply_markup=ReplyKeyboardRemove(),
+                parse_mode='HTML'
             )
+
+            # Delete all intermediate messages AFTER showing result
+            for msg_id in current_measurement.message_ids:
+                try:
+                    await context.bot.delete_message(chat_id=update.effective_chat.id, message_id=msg_id)
+                except Exception as e:
+                    logger.warning(f'Could not delete message {msg_id}: {e}')
         else:
             await update.message.reply_text(
-                '❌ Ошибка при сохранении данных. Пожалуйста, попробуйте позже.'
+                '❌ Ошибка при сохранении данных. Пожалуйста, попробуйте позже.',
+                reply_markup=ReplyKeyboardRemove()
             )
 
         return ConversationHandler.END
     except ValueError:
-        await update.message.reply_text('Пожалуйста, введите число:')
+        await send_and_track(update, 'Пожалуйста, введите число:')
         return EVENING_RIGHT_PULSE
 
 
@@ -444,7 +521,8 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Cancel the conversation"""
     current_measurement.reset()
     await update.message.reply_text(
-        'Измерение отменено. Используйте /morning или /evening для нового измерения.'
+        'Измерение отменено. Используйте /morning или /evening для нового измерения.',
+        reply_markup=ReplyKeyboardRemove()
     )
     return ConversationHandler.END
 
