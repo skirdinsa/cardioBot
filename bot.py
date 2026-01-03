@@ -25,6 +25,17 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+def load_version() -> str:
+    """Load bot version from version file."""
+    try:
+        with open('version', 'r', encoding='utf-8') as version_file:
+            return version_file.read().strip()
+    except OSError:
+        return '0.1.0'
+
+
+VERSION = load_version()
+
 # Conversation states
 (MORNING_LEFT_UPPER, MORNING_LEFT_LOWER, MORNING_LEFT_PULSE,
  MORNING_RIGHT_UPPER, MORNING_RIGHT_LOWER, MORNING_RIGHT_PULSE,
@@ -148,6 +159,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         '/morning - Утреннее измерение\n'
         '/evening - Вечернее измерение\n'
         '/settings - Настройки (таймзона, время напоминаний)\n'
+        '/version - Версия бота\n'
         '/cancel - Отменить текущее измерение\n'
         '/help - Показать помощь\n\n'
         f'Текущая таймзона: {current_tz}'
@@ -161,6 +173,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         '/morning - Начать утреннее измерение давления\n'
         '/evening - Начать вечернее измерение давления\n'
         '/settings - Настройки (таймзона, время напоминаний)\n'
+        '/version - Показать версию бота\n'
         '/cancel - Отменить текущее измерение\n'
         '/help - Показать эту справку\n\n'
         'Бот будет автоматически напоминать вам о необходимости измерения давления.'
@@ -178,6 +191,11 @@ async def settings_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         'Или отправьте /cancel для отмены'
     )
     return SETTINGS_TIMEZONE
+
+
+async def version_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Send a message when the command /version is issued."""
+    await update.message.reply_text(f'Версия бота: {VERSION}')
 
 
 async def settings_timezone(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -581,6 +599,7 @@ def main() -> None:
     # Add handlers
     application.add_handler(CommandHandler('start', start))
     application.add_handler(CommandHandler('help', help_command))
+    application.add_handler(CommandHandler('version', version_command))
     application.add_handler(settings_conv_handler)
     application.add_handler(morning_conv_handler)
     application.add_handler(evening_conv_handler)
