@@ -68,7 +68,11 @@ class ReminderScheduler:
         """Send morning reminder"""
         try:
             # Check if today's morning measurement exists
-            today = datetime.now(self.timezone).strftime('%d.%m.%Y')
+            now = datetime.now(self.timezone)
+            today = now.strftime('%d.%m.%Y')
+            current_time = now.strftime('%H:%M:%S')
+
+            logger.info(f'Morning reminder triggered at {current_time} (timezone: {self.timezone})')
             has_measurement = self.sheets_manager.has_morning_measurement(today)
 
             if not has_measurement:
@@ -76,17 +80,21 @@ class ReminderScheduler:
                     chat_id=self.user_id,
                     text='🌅 Доброе утро!\n\nПора измерить давление.\nИспользуйте команду /morning'
                 )
-                logger.info('Morning reminder sent')
+                logger.info(f'Morning reminder sent successfully at {current_time}')
             else:
-                logger.info('Morning measurement already exists, skipping reminder')
+                logger.info(f'Morning measurement for {today} already exists, skipping reminder')
         except Exception as e:
-            logger.error(f'Error sending morning reminder: {e}')
+            logger.error(f'Error sending morning reminder: {e}', exc_info=True)
 
     async def send_evening_reminder(self):
         """Send evening reminder"""
         try:
             # Check if today's evening measurement exists
-            today = datetime.now(self.timezone).strftime('%d.%m.%Y')
+            now = datetime.now(self.timezone)
+            today = now.strftime('%d.%m.%Y')
+            current_time = now.strftime('%H:%M:%S')
+
+            logger.info(f'Evening reminder triggered at {current_time} (timezone: {self.timezone})')
             has_measurement = self.sheets_manager.has_evening_measurement(today)
 
             if not has_measurement:
@@ -94,11 +102,11 @@ class ReminderScheduler:
                     chat_id=self.user_id,
                     text='🌙 Добрый вечер!\n\nПора измерить давление.\nИспользуйте команду /evening'
                 )
-                logger.info('Evening reminder sent')
+                logger.info(f'Evening reminder sent successfully at {current_time}')
             else:
-                logger.info('Evening measurement already exists, skipping reminder')
+                logger.info(f'Evening measurement for {today} already exists, skipping reminder')
         except Exception as e:
-            logger.error(f'Error sending evening reminder: {e}')
+            logger.error(f'Error sending evening reminder: {e}', exc_info=True)
 
     def morning_job(self):
         """Wrapper for morning reminder to run in asyncio"""
@@ -110,7 +118,8 @@ class ReminderScheduler:
 
     def start(self):
         """Start the scheduler"""
-        logger.info(f'Starting scheduler with morning reminders at {self.morning_reminder_times}')
+        logger.info(f'Starting scheduler with timezone: {self.timezone}')
+        logger.info(f'Morning reminders at {self.morning_reminder_times}')
         logger.info(f'Evening reminders at {self.evening_reminder_times}')
 
         # Schedule morning reminders (3 times: 0, +30 min, +60 min)
@@ -124,9 +133,10 @@ class ReminderScheduler:
             logger.info(f'Scheduled evening reminder at {reminder_time}')
 
         # Run the scheduler
+        logger.info('Scheduler started. Checking every 10 seconds...')
         while True:
             schedule.run_pending()
-            time.sleep(60)  # Check every minute
+            time.sleep(10)  # Check every 10 seconds for better precision
 
 
 if __name__ == '__main__':

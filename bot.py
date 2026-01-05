@@ -46,6 +46,16 @@ def get_current_date(context: ContextTypes.DEFAULT_TYPE) -> str:
         tz = pytz.timezone(os.getenv('TIMEZONE', 'Europe/Moscow'))
     return datetime.now(tz).strftime('%d.%m.%Y')
 
+
+def get_current_time(context: ContextTypes.DEFAULT_TYPE) -> str:
+    """Get current time based on user or env timezone."""
+    tz_name = context.user_data.get('timezone', os.getenv('TIMEZONE', 'Europe/Moscow'))
+    try:
+        tz = pytz.timezone(tz_name)
+    except pytz.exceptions.UnknownTimeZoneError:
+        tz = pytz.timezone(os.getenv('TIMEZONE', 'Europe/Moscow'))
+    return datetime.now(tz).strftime('%H:%M')
+
 # Conversation states
 (MORNING_LEFT_UPPER, MORNING_LEFT_LOWER, MORNING_LEFT_PULSE,
  MORNING_RIGHT_UPPER, MORNING_RIGHT_LOWER, MORNING_RIGHT_PULSE,
@@ -169,7 +179,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         '/morning - Утреннее измерение\n'
         '/evening - Вечернее измерение\n'
         '/settings - Настройки (таймзона, время напоминаний)\n'
-        '/version - Версия бота\n'
         '/cancel - Отменить текущее измерение\n'
         '/help - Показать помощь\n\n'
         f'Текущая таймзона: {current_tz}'
@@ -183,10 +192,10 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         '/morning - Начать утреннее измерение давления\n'
         '/evening - Начать вечернее измерение давления\n'
         '/settings - Настройки (таймзона, время напоминаний)\n'
-        '/version - Показать версию бота\n'
         '/cancel - Отменить текущее измерение\n'
         '/help - Показать эту справку\n\n'
-        'Бот будет автоматически напоминать вам о необходимости измерения давления.'
+        'Бот будет автоматически напоминать вам о необходимости измерения давления.\n\n'
+        f'Версия бота: {VERSION}'
     )
 
 
@@ -201,11 +210,6 @@ async def settings_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         'Или отправьте /cancel для отмены'
     )
     return SETTINGS_TIMEZONE
-
-
-async def version_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Send a message when the command /version is issued."""
-    await update.message.reply_text(f'Версия бота: {VERSION}')
 
 
 async def settings_timezone(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -336,9 +340,13 @@ async def morning_right_pulse(update: Update, context: ContextTypes.DEFAULT_TYPE
         # Add user's last message to deletion list
         current_measurement.message_ids.append(update.message.message_id)
 
+        # Get current time
+        current_time = get_current_time(context)
+
         # Save to Google Sheets
         success = sheets_manager.add_morning_measurement(
             date=current_measurement.date,
+            time=current_time,
             left_upper=current_measurement.left_upper,
             left_lower=current_measurement.left_lower,
             left_pulse=current_measurement.left_pulse,
@@ -358,17 +366,39 @@ async def morning_right_pulse(update: Update, context: ContextTypes.DEFAULT_TYPE
                 current_measurement.right_lower
             )
 
-            # Get Google Sheets link
-            sheet_url = f"https://docs.google.com/spreadsheets/d/{os.getenv('GOOGLE_SHEET_ID')}"
+            # Get moving average for last 7 days
+            moving_avg = sheets_manager.get_moving_average(
+                end_date=current_measurement.date,
+                period='morning',
+                days=7
+            )
 
-            result_msg = await update.message.reply_text(
+            # Build result message
+            message = (
                 '✅ Утреннее измерение сохранено!\n\n'
                 f'Дата: {current_measurement.date}\n\n'
                 f'📍 Левая рука: {current_measurement.left_upper}/{current_measurement.left_lower}, пульс {current_measurement.left_pulse}\n'
                 f'{left_analysis}\n\n'
                 f'📍 Правая рука: {current_measurement.right_upper}/{current_measurement.right_lower}, пульс {current_measurement.right_pulse}\n'
                 f'{right_analysis}\n\n'
-                f'📊 <a href="{sheet_url}">Открыть таблицу</a>',
+            )
+
+            # Add moving average if available
+            if moving_avg and moving_avg['count'] >= 2:
+                message += (
+                    f'📈 Среднее за {moving_avg["count"]} дней (утро):\n'
+                    f'Левая: {moving_avg["left"]["upper"]:.0f}/{moving_avg["left"]["lower"]:.0f}, '
+                    f'пульс {moving_avg["left"]["pulse"]:.0f}\n'
+                    f'Правая: {moving_avg["right"]["upper"]:.0f}/{moving_avg["right"]["lower"]:.0f}, '
+                    f'пульс {moving_avg["right"]["pulse"]:.0f}\n\n'
+                )
+
+            # Get Google Sheets link
+            sheet_url = f"https://docs.google.com/spreadsheets/d/{os.getenv('GOOGLE_SHEET_ID')}"
+            message += f'📊 <a href="{sheet_url}">Открыть таблицу</a>'
+
+            result_msg = await update.message.reply_text(
+                message,
                 reply_markup=ReplyKeyboardRemove(),
                 parse_mode='HTML'
             )
@@ -490,9 +520,13 @@ async def evening_right_pulse(update: Update, context: ContextTypes.DEFAULT_TYPE
         # Add user's last message to deletion list
         current_measurement.message_ids.append(update.message.message_id)
 
+        # Get current time
+        current_time = get_current_time(context)
+
         # Save to Google Sheets
         success = sheets_manager.add_evening_measurement(
             date=current_measurement.date,
+            time=current_time,
             left_upper=current_measurement.left_upper,
             left_lower=current_measurement.left_lower,
             left_pulse=current_measurement.left_pulse,
@@ -512,17 +546,39 @@ async def evening_right_pulse(update: Update, context: ContextTypes.DEFAULT_TYPE
                 current_measurement.right_lower
             )
 
-            # Get Google Sheets link
-            sheet_url = f"https://docs.google.com/spreadsheets/d/{os.getenv('GOOGLE_SHEET_ID')}"
+            # Get moving average for last 7 days
+            moving_avg = sheets_manager.get_moving_average(
+                end_date=current_measurement.date,
+                period='evening',
+                days=7
+            )
 
-            result_msg = await update.message.reply_text(
+            # Build result message
+            message = (
                 '✅ Вечернее измерение сохранено!\n\n'
                 f'Дата: {current_measurement.date}\n\n'
                 f'📍 Левая рука: {current_measurement.left_upper}/{current_measurement.left_lower}, пульс {current_measurement.left_pulse}\n'
                 f'{left_analysis}\n\n'
                 f'📍 Правая рука: {current_measurement.right_upper}/{current_measurement.right_lower}, пульс {current_measurement.right_pulse}\n'
                 f'{right_analysis}\n\n'
-                f'📊 <a href="{sheet_url}">Открыть таблицу</a>',
+            )
+
+            # Add moving average if available
+            if moving_avg and moving_avg['count'] >= 2:
+                message += (
+                    f'📈 Среднее за {moving_avg["count"]} дней (вечер):\n'
+                    f'Левая: {moving_avg["left"]["upper"]:.0f}/{moving_avg["left"]["lower"]:.0f}, '
+                    f'пульс {moving_avg["left"]["pulse"]:.0f}\n'
+                    f'Правая: {moving_avg["right"]["upper"]:.0f}/{moving_avg["right"]["lower"]:.0f}, '
+                    f'пульс {moving_avg["right"]["pulse"]:.0f}\n\n'
+                )
+
+            # Get Google Sheets link
+            sheet_url = f"https://docs.google.com/spreadsheets/d/{os.getenv('GOOGLE_SHEET_ID')}"
+            message += f'📊 <a href="{sheet_url}">Открыть таблицу</a>'
+
+            result_msg = await update.message.reply_text(
+                message,
                 reply_markup=ReplyKeyboardRemove(),
                 parse_mode='HTML'
             )
@@ -609,7 +665,6 @@ def main() -> None:
     # Add handlers
     application.add_handler(CommandHandler('start', start))
     application.add_handler(CommandHandler('help', help_command))
-    application.add_handler(CommandHandler('version', version_command))
     application.add_handler(settings_conv_handler)
     application.add_handler(morning_conv_handler)
     application.add_handler(evening_conv_handler)

@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 import gspread
 from google.oauth2.service_account import Credentials
 
@@ -82,7 +82,7 @@ class SheetsManager:
             logger.error(f'Error finding/creating row: {e}')
             raise
 
-    def add_morning_measurement(self, date: str, left_upper: int, left_lower: int,
+    def add_morning_measurement(self, date: str, time: str, left_upper: int, left_lower: int,
                                 left_pulse: int, right_upper: int, right_lower: int,
                                 right_pulse: int) -> bool:
         """
@@ -90,6 +90,7 @@ class SheetsManager:
 
         Args:
             date: Date in format DD.MM.YYYY
+            time: Time in format HH:MM
             left_upper: Left arm upper pressure
             left_lower: Left arm lower pressure
             left_pulse: Left arm pulse
@@ -104,29 +105,31 @@ class SheetsManager:
             row = self._find_or_create_row(date)
 
             # Column mapping for morning measurements (Утро):
-            # B - Left Upper (Левая Верхнее)
-            # C - Left Lower (Левая Нижнее)
-            # D - Left Pulse (Левая Пульс)
-            # E - Right Upper (Правая Верхнее)
-            # F - Right Lower (Правая Нижнее)
-            # G - Right Pulse (Правая Пульс)
+            # B - Time (Время)
+            # C - Left Upper (Левая Верхнее)
+            # D - Left Lower (Левая Нижнее)
+            # E - Left Pulse (Левая Пульс)
+            # F - Right Upper (Правая Верхнее)
+            # G - Right Lower (Правая Нижнее)
+            # H - Right Pulse (Правая Пульс)
 
             # Update cells
-            self.sheet.update_cell(row, 2, left_upper)   # B - Left Upper
-            self.sheet.update_cell(row, 3, left_lower)   # C - Left Lower
-            self.sheet.update_cell(row, 4, left_pulse)   # D - Left Pulse
-            self.sheet.update_cell(row, 5, right_upper)  # E - Right Upper
-            self.sheet.update_cell(row, 6, right_lower)  # F - Right Lower
-            self.sheet.update_cell(row, 7, right_pulse)  # G - Right Pulse
+            self.sheet.update_cell(row, 2, time)         # B - Time
+            self.sheet.update_cell(row, 3, left_upper)   # C - Left Upper
+            self.sheet.update_cell(row, 4, left_lower)   # D - Left Lower
+            self.sheet.update_cell(row, 5, left_pulse)   # E - Left Pulse
+            self.sheet.update_cell(row, 6, right_upper)  # F - Right Upper
+            self.sheet.update_cell(row, 7, right_lower)  # G - Right Lower
+            self.sheet.update_cell(row, 8, right_pulse)  # H - Right Pulse
 
-            logger.info(f'Successfully added morning measurement for {date}')
+            logger.info(f'Successfully added morning measurement for {date} at {time}')
             return True
 
         except Exception as e:
             logger.error(f'Error adding morning measurement: {e}')
             return False
 
-    def add_evening_measurement(self, date: str, left_upper: int, left_lower: int,
+    def add_evening_measurement(self, date: str, time: str, left_upper: int, left_lower: int,
                                left_pulse: int, right_upper: int, right_lower: int,
                                right_pulse: int) -> bool:
         """
@@ -134,6 +137,7 @@ class SheetsManager:
 
         Args:
             date: Date in format DD.MM.YYYY
+            time: Time in format HH:MM
             left_upper: Left arm upper pressure
             left_lower: Left arm lower pressure
             left_pulse: Left arm pulse
@@ -148,22 +152,24 @@ class SheetsManager:
             row = self._find_or_create_row(date)
 
             # Column mapping for evening measurements (Вечер):
-            # H - Left Upper (Левая Верхнее)
-            # I - Left Lower (Левая Нижнее)
-            # J - Left Pulse (Левая Пульс)
-            # K - Right Upper (Правая Верхнее)
-            # L - Right Lower (Правая Нижнее)
-            # M - Right Pulse (Правая Пульс)
+            # I - Time (Время)
+            # J - Left Upper (Левая Верхнее)
+            # K - Left Lower (Левая Нижнее)
+            # L - Left Pulse (Левая Пульс)
+            # M - Right Upper (Правая Верхнее)
+            # N - Right Lower (Правая Нижнее)
+            # O - Right Pulse (Правая Пульс)
 
             # Update cells
-            self.sheet.update_cell(row, 8, left_upper)   # H - Left Upper
-            self.sheet.update_cell(row, 9, left_lower)   # I - Left Lower
-            self.sheet.update_cell(row, 10, left_pulse)  # J - Left Pulse
-            self.sheet.update_cell(row, 11, right_upper) # K - Right Upper
-            self.sheet.update_cell(row, 12, right_lower) # L - Right Lower
-            self.sheet.update_cell(row, 13, right_pulse) # M - Right Pulse
+            self.sheet.update_cell(row, 9, time)         # I - Time
+            self.sheet.update_cell(row, 10, left_upper)  # J - Left Upper
+            self.sheet.update_cell(row, 11, left_lower)  # K - Left Lower
+            self.sheet.update_cell(row, 12, left_pulse)  # L - Left Pulse
+            self.sheet.update_cell(row, 13, right_upper) # M - Right Upper
+            self.sheet.update_cell(row, 14, right_lower) # N - Right Lower
+            self.sheet.update_cell(row, 15, right_pulse) # O - Right Pulse
 
-            logger.info(f'Successfully added evening measurement for {date}')
+            logger.info(f'Successfully added evening measurement for {date} at {time}')
             return True
 
         except Exception as e:
@@ -279,3 +285,80 @@ class SheetsManager:
         except Exception as e:
             logger.error(f'Error checking evening measurement: {e}')
             return False
+
+    def get_moving_average(self, end_date: str, period: str = 'morning', days: int = 7) -> dict:
+        """
+        Calculate moving average for the last N days for a specific period (morning or evening)
+
+        Args:
+            end_date: End date in format DD.MM.YYYY
+            period: 'morning' or 'evening'
+            days: Number of days to calculate average (default: 7)
+
+        Returns:
+            Dictionary with average values for left and right arm measurements
+        """
+        try:
+            # Parse end date
+            end_dt = datetime.strptime(end_date, '%d.%m.%Y')
+
+            # Collect measurements for the last N days
+            measurements = []
+            for i in range(days):
+                date_to_check = (end_dt - timedelta(days=i)).strftime('%d.%m.%Y')
+                measurement = self.get_measurement(date_to_check)
+
+                if measurement:
+                    period_data = measurement.get(period, {})
+                    if period_data:
+                        measurements.append(period_data)
+
+            if not measurements:
+                return None
+
+            # Calculate averages
+            left_upper_sum = 0
+            left_lower_sum = 0
+            left_pulse_sum = 0
+            right_upper_sum = 0
+            right_lower_sum = 0
+            right_pulse_sum = 0
+            count = 0
+
+            for m in measurements:
+                left = m.get('left', {})
+                right = m.get('right', {})
+
+                # Only count if we have valid numeric values
+                try:
+                    if left.get('upper') and left.get('lower') and left.get('pulse'):
+                        left_upper_sum += int(left['upper'])
+                        left_lower_sum += int(left['lower'])
+                        left_pulse_sum += int(left['pulse'])
+                        right_upper_sum += int(right['upper'])
+                        right_lower_sum += int(right['lower'])
+                        right_pulse_sum += int(right['pulse'])
+                        count += 1
+                except (ValueError, TypeError):
+                    continue
+
+            if count == 0:
+                return None
+
+            return {
+                'count': count,
+                'left': {
+                    'upper': round(left_upper_sum / count, 1),
+                    'lower': round(left_lower_sum / count, 1),
+                    'pulse': round(left_pulse_sum / count, 1)
+                },
+                'right': {
+                    'upper': round(right_upper_sum / count, 1),
+                    'lower': round(right_lower_sum / count, 1),
+                    'pulse': round(right_pulse_sum / count, 1)
+                }
+            }
+
+        except Exception as e:
+            logger.error(f'Error calculating moving average: {e}')
+            return None
