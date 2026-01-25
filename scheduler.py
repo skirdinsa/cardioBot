@@ -5,6 +5,8 @@ import schedule
 import time
 from datetime import datetime, timedelta
 from telegram import Bot
+from telegram.error import NetworkError, TimedOut
+from telegram.request import HTTPXRequest
 from dotenv import load_dotenv
 import pytz
 from sheets_manager import SheetsManager
@@ -19,7 +21,6 @@ class ReminderScheduler:
     """Scheduler for sending reminders"""
 
     def __init__(self):
-        self.bot = Bot(token=os.getenv('TELEGRAM_BOT_TOKEN'))
         self.user_id = os.getenv('TELEGRAM_USER_ID')
         self.timezone = pytz.timezone(os.getenv('TIMEZONE', 'Europe/Moscow'))
         self._apply_timezone()
@@ -34,6 +35,48 @@ class ReminderScheduler:
         self.morning_reminder_times = self._calculate_reminder_times(self.morning_time)
         self.evening_reminder_times = self._calculate_reminder_times(self.evening_time)
 
+    def _build_bot(self) -> Bot:
+        """Create bot with a slightly larger connection pool to avoid pool exhaustion."""
+        request = HTTPXRequest(
+            connection_pool_size=5,
+            read_timeout=10.0,
+            write_timeout=10.0,
+            connect_timeout=10.0,
+            pool_timeout=10.0,
+        )
+        return Bot(token=os.getenv('TELEGRAM_BOT_TOKEN'), request=request)
+
+    async def _send_message_with_retry(self, text: str, current_time: str, label: str) -> None:
+        """
+        Send a message with a fresh bot client; retry once on pool/loop issues.
+        """
+        for attempt in (1, 2):
+            bot = self._build_bot()
+            try:
+                await bot.send_message(chat_id=self.user_id, text=text)
+                logger.info(f'{label} sent successfully{" on retry" if attempt == 2 else ""} at {current_time}')
+                return
+            except (TimedOut, NetworkError) as e:
+                # Close and retry once with a new client
+                logger.warning(f'{label} send failed (attempt {attempt}) with network/timeout: {e}')
+                try:
+                    await bot.shutdown()
+                except Exception:
+                    pass
+                if attempt == 2:
+                    raise
+            except Exception:
+                # Unknown error, rethrow
+                try:
+                    await bot.shutdown()
+                except Exception:
+                    pass
+                raise
+            else:
+                try:
+                    await bot.shutdown()
+                except Exception:
+                    pass
     def _apply_timezone(self) -> None:
         """Apply TZ for schedule library which uses local time."""
         tz_name = os.getenv('TIMEZONE', 'Europe/Moscow')
@@ -76,11 +119,11 @@ class ReminderScheduler:
             has_measurement = self.sheets_manager.has_morning_measurement(today)
 
             if not has_measurement:
-                await self.bot.send_message(
-                    chat_id=self.user_id,
-                    text='🌅 Доброе утро!\n\nПора измерить давление.\nИспользуйте команду /morning'
+                await self._send_message_with_retry(
+                    text='🌅 Доброе утро!\n\nПора измерить давление.\nИспользуйте команду /morning',
+                    current_time=current_time,
+                    label='Morning reminder'
                 )
-                logger.info(f'Morning reminder sent successfully at {current_time}')
             else:
                 logger.info(f'Morning measurement for {today} already exists, skipping reminder')
         except Exception as e:
@@ -98,11 +141,11 @@ class ReminderScheduler:
             has_measurement = self.sheets_manager.has_evening_measurement(today)
 
             if not has_measurement:
-                await self.bot.send_message(
-                    chat_id=self.user_id,
-                    text='🌙 Добрый вечер!\n\nПора измерить давление.\nИспользуйте команду /evening'
+                await self._send_message_with_retry(
+                    text='🌙 Добрый вечер!\n\nПора измерить давление.\nИспользуйте команду /evening',
+                    current_time=current_time,
+                    label='Evening reminder'
                 )
-                logger.info(f'Evening reminder sent successfully at {current_time}')
             else:
                 logger.info(f'Evening measurement for {today} already exists, skipping reminder')
         except Exception as e:

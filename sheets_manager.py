@@ -198,26 +198,26 @@ class SheetsManager:
                         'date': date,
                         'morning': {
                             'left': {
-                                'upper': row_data[1] if len(row_data) > 1 else '',
-                                'lower': row_data[2] if len(row_data) > 2 else '',
-                                'pulse': row_data[3] if len(row_data) > 3 else '',
+                                'upper': row_data[2] if len(row_data) > 2 else '',
+                                'lower': row_data[3] if len(row_data) > 3 else '',
+                                'pulse': row_data[4] if len(row_data) > 4 else '',
                             },
                             'right': {
-                                'upper': row_data[4] if len(row_data) > 4 else '',
-                                'lower': row_data[5] if len(row_data) > 5 else '',
-                                'pulse': row_data[6] if len(row_data) > 6 else '',
+                                'upper': row_data[5] if len(row_data) > 5 else '',
+                                'lower': row_data[6] if len(row_data) > 6 else '',
+                                'pulse': row_data[7] if len(row_data) > 7 else '',
                             }
                         },
                         'evening': {
                             'left': {
-                                'upper': row_data[7] if len(row_data) > 7 else '',
-                                'lower': row_data[8] if len(row_data) > 8 else '',
-                                'pulse': row_data[9] if len(row_data) > 9 else '',
+                                'upper': row_data[9] if len(row_data) > 9 else '',
+                                'lower': row_data[10] if len(row_data) > 10 else '',
+                                'pulse': row_data[11] if len(row_data) > 11 else '',
                             },
                             'right': {
-                                'upper': row_data[10] if len(row_data) > 10 else '',
-                                'lower': row_data[11] if len(row_data) > 11 else '',
-                                'pulse': row_data[12] if len(row_data) > 12 else '',
+                                'upper': row_data[12] if len(row_data) > 12 else '',
+                                'lower': row_data[13] if len(row_data) > 13 else '',
+                                'pulse': row_data[14] if len(row_data) > 14 else '',
                             }
                         }
                     }
