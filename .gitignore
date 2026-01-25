@@ -47,3 +47,6 @@ Thumbs.db
 # Bot persistence data
 bot_data.pkl
 bot_data.pkl.bak
+
+# User settings data
+data/

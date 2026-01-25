@@ -2,18 +2,20 @@ import os
 import logging
 from datetime import datetime
 import pytz
-from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove
+from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 from telegram.ext import (
     Application,
     CommandHandler,
     MessageHandler,
     ConversationHandler,
+    CallbackQueryHandler,
     filters,
     ContextTypes,
     PicklePersistence,
 )
 from dotenv import load_dotenv
 from sheets_manager import SheetsManager
+from user_settings import get_user_settings, get_thresholds
 
 # Load environment variables
 load_dotenv()
@@ -70,22 +72,30 @@ sheets_manager = SheetsManager(
 )
 
 
-def analyze_blood_pressure(upper: int, lower: int) -> str:
+def analyze_blood_pressure(upper: int, lower: int, user_id: str = None) -> str:
     """
     Analyze blood pressure values and return feedback
 
     Args:
         upper: Upper (systolic) blood pressure
         lower: Lower (diastolic) blood pressure
+        user_id: Telegram user ID (optional, for personalized thresholds)
 
     Returns:
         Feedback message with emoji
     """
-    # Thresholds for blood pressure
-    good_upper = int(os.getenv('GOOD_UPPER', 130))
-    warning_upper = int(os.getenv('WARNING_UPPER', 140))
-    good_lower = int(os.getenv('GOOD_LOWER', 70))
-    warning_lower = int(os.getenv('WARNING_LOWER', 90))
+    # Get thresholds from user settings or defaults
+    if user_id:
+        thresholds = get_thresholds(user_id)
+        good_upper = thresholds['good_upper']
+        warning_upper = thresholds['warning_upper']
+        good_lower = thresholds['good_lower']
+        warning_lower = thresholds['warning_lower']
+    else:
+        good_upper = int(os.getenv('GOOD_UPPER', 130))
+        warning_upper = int(os.getenv('WARNING_UPPER', 140))
+        good_lower = int(os.getenv('GOOD_LOWER', 70))
+        warning_lower = int(os.getenv('WARNING_LOWER', 90))
 
     # Determine status for upper (systolic) pressure
     if upper <= good_upper:
@@ -201,6 +211,36 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
 async def settings_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Start settings configuration"""
+    webapp_url = os.getenv('WEBAPP_URL')
+
+    # If webapp is configured, show both options
+    if webapp_url:
+        user_id = str(update.effective_user.id)
+        settings = get_user_settings(user_id)
+
+        keyboard = [
+            [InlineKeyboardButton(
+                "📱 Открыть настройки",
+                web_app=WebAppInfo(url=webapp_url)
+            )],
+            [InlineKeyboardButton(
+                "⌨️ Изменить таймзону вручную",
+                callback_data="settings_timezone"
+            )],
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+
+        await update.message.reply_text(
+            f'⚙️ Настройки\n\n'
+            f'🔔 Утренние напоминания: {"✅" if settings["notifications"]["morning_enabled"] else "❌"} ({settings["notifications"]["morning_time"]})\n'
+            f'🔔 Вечерние напоминания: {"✅" if settings["notifications"]["evening_enabled"] else "❌"} ({settings["notifications"]["evening_time"]})\n'
+            f'🌍 Таймзона: {settings["timezone"]}\n\n'
+            'Нажмите кнопку ниже для изменения настроек:',
+            reply_markup=reply_markup
+        )
+        return ConversationHandler.END
+
+    # Fallback to text-based timezone setting
     current_tz = context.user_data.get('timezone', os.getenv('TIMEZONE', 'Europe/Moscow'))
 
     await update.message.reply_text(
@@ -210,6 +250,21 @@ async def settings_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         'Или отправьте /cancel для отмены'
     )
     return SETTINGS_TIMEZONE
+
+
+async def settings_timezone_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle callback for manual timezone setting"""
+    query = update.callback_query
+    await query.answer()
+
+    current_tz = context.user_data.get('timezone', os.getenv('TIMEZONE', 'Europe/Moscow'))
+
+    await query.message.reply_text(
+        f'⚙️ Изменение таймзоны\n\n'
+        f'Текущая таймзона: {current_tz}\n\n'
+        'Введите новую таймзону (например: Europe/Moscow, Asia/Tokyo, America/New_York)\n'
+        'Или отправьте /cancel для отмены'
+    )
 
 
 async def settings_timezone(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -356,14 +411,17 @@ async def morning_right_pulse(update: Update, context: ContextTypes.DEFAULT_TYPE
         )
 
         if success:
-            # Analyze blood pressure for both arms
+            # Analyze blood pressure for both arms (with user-specific thresholds)
+            user_id = str(update.effective_user.id)
             left_analysis = analyze_blood_pressure(
                 current_measurement.left_upper,
-                current_measurement.left_lower
+                current_measurement.left_lower,
+                user_id
             )
             right_analysis = analyze_blood_pressure(
                 current_measurement.right_upper,
-                current_measurement.right_lower
+                current_measurement.right_lower,
+                user_id
             )
 
             # Get moving average for last 7 days
@@ -536,14 +594,17 @@ async def evening_right_pulse(update: Update, context: ContextTypes.DEFAULT_TYPE
         )
 
         if success:
-            # Analyze blood pressure for both arms
+            # Analyze blood pressure for both arms (with user-specific thresholds)
+            user_id = str(update.effective_user.id)
             left_analysis = analyze_blood_pressure(
                 current_measurement.left_upper,
-                current_measurement.left_lower
+                current_measurement.left_lower,
+                user_id
             )
             right_analysis = analyze_blood_pressure(
                 current_measurement.right_upper,
-                current_measurement.right_lower
+                current_measurement.right_lower,
+                user_id
             )
 
             # Get moving average for last 7 days
@@ -665,6 +726,7 @@ def main() -> None:
     # Add handlers
     application.add_handler(CommandHandler('start', start))
     application.add_handler(CommandHandler('help', help_command))
+    application.add_handler(CallbackQueryHandler(settings_timezone_callback, pattern='^settings_timezone$'))
     application.add_handler(settings_conv_handler)
     application.add_handler(morning_conv_handler)
     application.add_handler(evening_conv_handler)

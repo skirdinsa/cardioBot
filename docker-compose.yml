@@ -11,6 +11,7 @@ services:
       - TZ=${TIMEZONE}
     volumes:
       - ./credentials.json:/app/credentials.json:ro
+      - ./data:/app/data
     networks:
       - cardio_network
     depends_on:
@@ -26,6 +27,25 @@ services:
       - .env
     environment:
       - TZ=${TIMEZONE}
+    volumes:
+      - ./data:/app/data
+    networks:
+      - cardio_network
+
+  webapp:
+    build:
+      context: .
+      dockerfile: Dockerfile.webapp
+    container_name: cardio_webapp
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - TZ=${TIMEZONE}
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./data:/app/data
     networks:
       - cardio_network
 

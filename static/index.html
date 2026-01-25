@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>CardioBot Settings</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div id="app">
+        <div id="loading" class="loading">
+            <div class="spinner"></div>
+            <p>Loading...</p>
+        </div>
+
+        <div id="content" class="content hidden">
+            <!-- Notifications Section -->
+            <section class="section">
+                <h2 class="section-title">Notifications</h2>
+
+                <div class="setting-row">
+                    <div class="setting-info">
+                        <span class="setting-label">Morning reminder</span>
+                        <span class="setting-hint">Daily reminder to measure BP</span>
+                    </div>
+                    <label class="toggle">
+                        <input type="checkbox" id="morning-enabled">
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+
+                <div class="setting-row time-row" id="morning-time-row">
+                    <span class="setting-label">Time</span>
+                    <input type="time" id="morning-time" class="time-input">
+                </div>
+
+                <div class="divider"></div>
+
+                <div class="setting-row">
+                    <div class="setting-info">
+                        <span class="setting-label">Evening reminder</span>
+                        <span class="setting-hint">Daily reminder to measure BP</span>
+                    </div>
+                    <label class="toggle">
+                        <input type="checkbox" id="evening-enabled">
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+
+                <div class="setting-row time-row" id="evening-time-row">
+                    <span class="setting-label">Time</span>
+                    <input type="time" id="evening-time" class="time-input">
+                </div>
+            </section>
+
+            <!-- Thresholds Section -->
+            <section class="section">
+                <h2 class="section-title">Blood Pressure Thresholds</h2>
+                <p class="section-description">
+                    Set your personal thresholds for blood pressure analysis
+                </p>
+
+                <div class="threshold-group">
+                    <h3 class="threshold-title good">Normal (Green Zone)</h3>
+
+                    <div class="threshold-row">
+                        <label for="good-upper">Systolic (upper)</label>
+                        <div class="threshold-input-group">
+                            <input type="number" id="good-upper" min="80" max="200" class="threshold-input">
+                            <span class="unit">mmHg</span>
+                        </div>
+                    </div>
+
+                    <div class="threshold-row">
+                        <label for="good-lower">Diastolic (lower)</label>
+                        <div class="threshold-input-group">
+                            <input type="number" id="good-lower" min="40" max="120" class="threshold-input">
+                            <span class="unit">mmHg</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="threshold-group">
+                    <h3 class="threshold-title warning">Elevated (Yellow Zone)</h3>
+
+                    <div class="threshold-row">
+                        <label for="warning-upper">Systolic (upper)</label>
+                        <div class="threshold-input-group">
+                            <input type="number" id="warning-upper" min="80" max="220" class="threshold-input">
+                            <span class="unit">mmHg</span>
+                        </div>
+                    </div>
+
+                    <div class="threshold-row">
+                        <label for="warning-lower">Diastolic (lower)</label>
+                        <div class="threshold-input-group">
+                            <input type="number" id="warning-lower" min="40" max="140" class="threshold-input">
+                            <span class="unit">mmHg</span>
+                        </div>
+                    </div>
+                </div>
+
+                <p class="threshold-note">
+                    Values above the yellow zone will be marked as high (red)
+                </p>
+            </section>
+
+            <!-- Timezone Section -->
+            <section class="section">
+                <h2 class="section-title">Timezone</h2>
+
+                <div class="setting-row">
+                    <span class="setting-label">Your timezone</span>
+                    <select id="timezone" class="select-input">
+                        <option value="Europe/Moscow">Moscow (UTC+3)</option>
+                        <option value="Europe/Kaliningrad">Kaliningrad (UTC+2)</option>
+                        <option value="Europe/Samara">Samara (UTC+4)</option>
+                        <option value="Asia/Yekaterinburg">Yekaterinburg (UTC+5)</option>
+                        <option value="Asia/Omsk">Omsk (UTC+6)</option>
+                        <option value="Asia/Krasnoyarsk">Krasnoyarsk (UTC+7)</option>
+                        <option value="Asia/Irkutsk">Irkutsk (UTC+8)</option>
+                        <option value="Asia/Yakutsk">Yakutsk (UTC+9)</option>
+                        <option value="Asia/Vladivostok">Vladivostok (UTC+10)</option>
+                        <option value="Asia/Magadan">Magadan (UTC+11)</option>
+                        <option value="Asia/Kamchatka">Kamchatka (UTC+12)</option>
+                        <option value="UTC">UTC</option>
+                        <option value="Europe/London">London (UTC+0/+1)</option>
+                        <option value="Europe/Berlin">Berlin (UTC+1/+2)</option>
+                        <option value="America/New_York">New York (UTC-5/-4)</option>
+                        <option value="America/Los_Angeles">Los Angeles (UTC-8/-7)</option>
+                        <option value="Asia/Tokyo">Tokyo (UTC+9)</option>
+                        <option value="Asia/Shanghai">Shanghai (UTC+8)</option>
+                    </select>
+                </div>
+            </section>
+
+            <!-- Reset Section -->
+            <section class="section">
+                <button id="reset-btn" class="reset-button">
+                    Reset to defaults
+                </button>
+            </section>
+        </div>
+
+        <div id="error" class="error hidden">
+            <p id="error-message">An error occurred</p>
+            <button id="retry-btn" class="retry-button">Retry</button>
+        </div>
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>
