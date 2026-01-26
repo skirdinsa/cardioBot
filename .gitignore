@@ -50,3 +50,7 @@ bot_data.pkl.bak
 
 # User settings data
 data/
+
+# SSL certificates and certbot
+ssl/
+certbot/
